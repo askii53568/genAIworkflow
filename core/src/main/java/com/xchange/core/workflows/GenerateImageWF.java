@@ -1,5 +1,7 @@
 package com.xchange.core.workflows;
-import com.adobe.granite.workflow.exec.WorkflowProcess;
+import com.adobe.granite.workflow.*;
+import com.adobe.granite.workflow.exec.*;
+import com.adobe.granite.workflow.metadata.*;
 import com.day.cq.wcm.api.PageManager;
 import com.day.cq.wcm.api.WCMException;
 import lombok.Getter;
@@ -20,4 +22,8 @@ import static org.osgi.service.component.annotations.ReferenceCardinality.OPTION
 @Slf4j
 @Component(service = WorkflowProcess.class, property = {"process.label=Generate Image via DALL-E"})
 public class GenerateImageWF implements WorkflowProcess {
+    @Override
+    public void execute(WorkItem item, WorkflowSession session, MetaDataMap args) throws WorkflowException {
+
+    }
 }
