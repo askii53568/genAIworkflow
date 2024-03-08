@@ -1,0 +1,7 @@
+{
+    "scripts": [
+        "create path (sling:OrderedFolder) /content/dam/xchange",
+        "create path (nt:unstructured) /content/dam/xchange/jcr:content",
+        "set properties on /content/dam/xchange/jcr:content\n  set cq:conf{String} to /conf/xchange\n  set jcr:title{String} to \"XChange WF\"\nend"
+    ]
+}
