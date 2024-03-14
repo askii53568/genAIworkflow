@@ -41,6 +41,18 @@ public class GenerateImageWF implements WorkflowProcess {
     // OpenAI API endpoints
     private static final String IMAGE_VARIATIONS_API_ENDPOINT = "https://api.openai.com/v1/images/variations";
 
+    private static final String OG_IMAGE_PREFIX = "og-img-";
+
+    private static final String AI_IMAGE_PREFIX = "ai-img-";
+
+    private static final String IMAGE_SIZE = "1024x1024";
+
+    private static final String AI_MODEL = "dall-e-2";
+
+    private static final String IMAGE_COUNT = "1";
+
+    private static final String PORTRAIT_GALLERY_PATH = "1";
+
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Override
@@ -65,20 +77,20 @@ public class GenerateImageWF implements WorkflowProcess {
         }
         int resourceID = Math.abs(resource.getPath().hashCode() - 1);
         InputStream inputStream = getImageAsStream(imageDAMPath, resolver);
-        ImageResponse imageResponse = uploadImageWithFormData(inputStream, "og-img-" + resourceID);
+        ImageResponse imageResponse = uploadImageWithFormData(inputStream, AI_IMAGE_PREFIX + resourceID);
 
         if(imageResponse != null && imageResponse.getError() != null)
         {
             log.error(imageResponse.getError().getMessage());
         }else {
             String imageURL = imageResponse.getData().get(0).getUrl();
-            String imageName = "ai-img-" + resourceID;
+            String imageName = AI_IMAGE_PREFIX + resourceID;
             InputData inputData = new InputData(folderPath, imageName, imageURL);
             saveImageToDAM(resolver, inputData);
         }
     }
 
-    public InputStream getImageAsStream(String damPath, ResourceResolver resolver){
+    private InputStream getImageAsStream(String damPath, ResourceResolver resolver){
         try {
             Resource resource = resolver.getResource(damPath + "/jcr:content/renditions/original/jcr:content");
             if (resource != null) {
@@ -94,7 +106,7 @@ public class GenerateImageWF implements WorkflowProcess {
         return null;
     }
 
-    public static ImageResponse uploadImageWithFormData(InputStream inputStream, String imageName) {
+    private static ImageResponse uploadImageWithFormData(InputStream inputStream, String imageName) {
 
         try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
             HttpPost uploadFile = new HttpPost(IMAGE_VARIATIONS_API_ENDPOINT);
@@ -103,9 +115,9 @@ public class GenerateImageWF implements WorkflowProcess {
 
             MultipartEntityBuilder builder = MultipartEntityBuilder.create();
             builder.addBinaryBody("image", inputStream, ContentType.APPLICATION_OCTET_STREAM, imageName);
-            builder.addTextBody("model", "dall-e-2");
-            builder.addTextBody("n", "1");
-            builder.addTextBody("size", "1024x1024");
+            builder.addTextBody("model", AI_MODEL);
+            builder.addTextBody("n", IMAGE_COUNT);
+            builder.addTextBody("size", IMAGE_SIZE);
 
             HttpEntity multipart = builder.build();
             uploadFile.setEntity(multipart);
@@ -136,7 +148,7 @@ public class GenerateImageWF implements WorkflowProcess {
             mimeType = uCon.getContentType();
 
             // Create the asset in the DAM
-            String fileExt = mimeType.replaceAll("image/", "");
+            String fileExt = mimeType.replace("image/", "");
             String imagePath = inputData.getDamfolderpath() + "/" + inputData.getImagename() + "." + fileExt;
 
             Objects.requireNonNull(resourceResolver.adaptTo(AssetManager.class)).createAsset(imagePath, inputStream, mimeType, true);
