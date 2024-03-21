@@ -3,5 +3,14 @@
     <filter root="/conf/xchange" mode="merge"/>
     <filter root="/content/xchange" mode="merge"/>
     <filter root="/content/dam/xchange/asset.jpg" mode="merge"/>
+    <filter root="/content/dam/xchange/portrait-gallery" mode="merge"/>
+    <filter root="/content/dam/xchange/ai-portrait-gallery" mode="merge"/>
     <filter root="/content/experience-fragments/xchange" mode="merge"/>
+    <filter root="/conf/xchange/settings/wcm/policies"/>
+    <filter root="/conf/xchange/settings/wcm" mode="update"/>
+    <filter root="/conf/xchange" mode="merge"/>
+    <filter root="/conf/global/settings/workflow/models/generate-ai-image" />
+
+    <filter root="/var/workflow/models" mode="update"/>
+    <filter root="/var/workflow/models/generate-ai-image" />
 </workspaceFilter>

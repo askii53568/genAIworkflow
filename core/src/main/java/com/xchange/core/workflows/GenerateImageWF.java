@@ -5,6 +5,7 @@ import com.adobe.granite.workflow.metadata.*;
 import com.day.cq.dam.api.*;
 import com.xchange.core.utils.*;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.jackrabbit.commons.*;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.osgi.service.component.annotations.Component;
 
@@ -32,6 +33,7 @@ import javax.jcr.*;
 import static com.day.cq.dam.api.DamConstants.NT_DAM_ASSET;
 import static com.xchange.core.utils.SecretVariables.AUTH_HEADER;
 import static com.xchange.core.utils.SecretVariables.COOKIE_HEADER;
+import static org.apache.commons.lang3.StringUtils.EMPTY;
 import static org.apache.sling.jcr.resource.api.JcrResourceConstants.NT_SLING_FOLDER;
 
 @Slf4j
@@ -51,14 +53,17 @@ public class GenerateImageWF implements WorkflowProcess {
 
     private static final String IMAGE_COUNT = "1";
 
-    private static final String PORTRAIT_GALLERY_PATH = "1";
+    private static final String AI_GALLERY_PATH = "/content/dam/xchange/ai-portrait-gallery/";
+
+    private static final String PORTRAIT_GALLERY_PATH = "/content/dam/xchange/portrait-gallery";
+
+    private static final String OG_REDNITION_PATH = "/jcr:content/renditions/original/jcr:content";
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Override
     public void execute(WorkItem item, WorkflowSession session, MetaDataMap args) throws WorkflowException {
         String imageDAMPath = "";
-        String folderPath = "";
         String payloadPath = item.getWorkflowData().getPayload().toString();
         ResourceResolver resolver = session.adaptTo(ResourceResolver.class);
         Resource resource = resolver.getResource(payloadPath);
@@ -71,11 +76,8 @@ public class GenerateImageWF implements WorkflowProcess {
         } else {
             return;
         }
-        Resource folder = resource.getParent();
-        if(folder != null && folder.isResourceType(NT_SLING_FOLDER)){
-            folderPath = folder.getPath();
-        }
-        int resourceID = Math.abs(resource.getPath().hashCode() - 1);
+        //come up with a way to do normal resoource ID
+        int resourceID = Math.abs(resource.getName().hashCode() - 1);
         InputStream inputStream = getImageAsStream(imageDAMPath, resolver);
         ImageResponse imageResponse = uploadImageWithFormData(inputStream, AI_IMAGE_PREFIX + resourceID);
 
@@ -85,14 +87,14 @@ public class GenerateImageWF implements WorkflowProcess {
         }else {
             String imageURL = imageResponse.getData().get(0).getUrl();
             String imageName = AI_IMAGE_PREFIX + resourceID;
-            InputData inputData = new InputData(folderPath, imageName, imageURL);
+            InputData inputData = new InputData(imageName, imageURL);
             saveImageToDAM(resolver, inputData);
         }
     }
 
     private InputStream getImageAsStream(String damPath, ResourceResolver resolver){
         try {
-            Resource resource = resolver.getResource(damPath + "/jcr:content/renditions/original/jcr:content");
+            Resource resource = resolver.getResource(damPath + OG_REDNITION_PATH);
             if (resource != null) {
                 Node node = resource.adaptTo(Node.class);
                 if (node != null) {
@@ -149,7 +151,7 @@ public class GenerateImageWF implements WorkflowProcess {
 
             // Create the asset in the DAM
             String fileExt = mimeType.replace("image/", "");
-            String imagePath = inputData.getDamfolderpath() + "/" + inputData.getImagename() + "." + fileExt;
+            String imagePath = AI_GALLERY_PATH + inputData.getImagename() + "." + fileExt;
 
             Objects.requireNonNull(resourceResolver.adaptTo(AssetManager.class)).createAsset(imagePath, inputStream, mimeType, true);
 
