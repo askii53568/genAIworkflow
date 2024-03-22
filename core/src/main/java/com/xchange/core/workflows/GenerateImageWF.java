@@ -30,11 +30,12 @@ import org.apache.http.util.EntityUtils;
 
 import javax.jcr.*;
 
+import static com.day.cq.commons.jcr.JcrConstants.JCR_DATA;
+import static com.day.cq.dam.api.DamConstants.DAM_SIZE;
+import static com.day.cq.dam.api.DamConstants.DC_FORMAT;
 import static com.day.cq.dam.api.DamConstants.NT_DAM_ASSET;
 import static com.xchange.core.utils.SecretVariables.AUTH_HEADER;
 import static com.xchange.core.utils.SecretVariables.COOKIE_HEADER;
-import static org.apache.commons.lang3.StringUtils.EMPTY;
-import static org.apache.sling.jcr.resource.api.JcrResourceConstants.NT_SLING_FOLDER;
 
 @Slf4j
 @Component(service = WorkflowProcess.class, property = {"process.label=Generate Image via DALL-E"})
@@ -42,8 +43,6 @@ public class GenerateImageWF implements WorkflowProcess {
 
     // OpenAI API endpoints
     private static final String IMAGE_VARIATIONS_API_ENDPOINT = "https://api.openai.com/v1/images/variations";
-
-    private static final String OG_IMAGE_PREFIX = "og-img-";
 
     private static final String AI_IMAGE_PREFIX = "ai-img-";
 
@@ -55,34 +54,32 @@ public class GenerateImageWF implements WorkflowProcess {
 
     private static final String AI_GALLERY_PATH = "/content/dam/xchange/ai-portrait-gallery/";
 
-    private static final String PORTRAIT_GALLERY_PATH = "/content/dam/xchange/portrait-gallery";
+    private static final String OG_REDNITION_PATH = "jcr:content/renditions/original/jcr:content";
 
-    private static final String OG_REDNITION_PATH = "/jcr:content/renditions/original/jcr:content";
+    public static final String JCR_METADATA_NODE = "jcr:content/metadata";
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Override
     public void execute(WorkItem item, WorkflowSession session, MetaDataMap args) throws WorkflowException {
-        String imageDAMPath = "";
+        Node assetNode = null;
         String payloadPath = item.getWorkflowData().getPayload().toString();
         ResourceResolver resolver = session.adaptTo(ResourceResolver.class);
         Resource resource = resolver.getResource(payloadPath);
         if (resource == null) return;
 
         if (resource.isResourceType(NT_DAM_ASSET)) {
-            imageDAMPath = resource.getPath();
-            //check if the image is less than 4MB and is also a PNG
-            //then throw workflow exception "Uploaded image must be a PNG and less than 4 MB."
-        } else {
-            return;
+            assetNode = resource.adaptTo(Node.class);
+            if(assetNode == null || !checkImageValid(assetNode)){
+                throw new WorkflowException("Uploaded image must be a PNG and less than 4 MB.");
+            }
         }
         //come up with a way to do normal resoource ID
         int resourceID = Math.abs(resource.getName().hashCode() - 1);
-        InputStream inputStream = getImageAsStream(imageDAMPath, resolver);
+        InputStream inputStream = getImageAsStream(assetNode);
         ImageResponse imageResponse = uploadImageWithFormData(inputStream, AI_IMAGE_PREFIX + resourceID);
 
-        if(imageResponse != null && imageResponse.getError() != null)
-        {
+        if(imageResponse != null && imageResponse.getError() != null){
             log.error(imageResponse.getError().getMessage());
         }else {
             String imageURL = imageResponse.getData().get(0).getUrl();
@@ -92,15 +89,41 @@ public class GenerateImageWF implements WorkflowProcess {
         }
     }
 
-    private InputStream getImageAsStream(String damPath, ResourceResolver resolver){
+    private boolean checkImageValid(Node assetNode){
         try {
-            Resource resource = resolver.getResource(damPath + OG_REDNITION_PATH);
-            if (resource != null) {
-                Node node = resource.adaptTo(Node.class);
-                if (node != null) {
-                    Binary binary = node.getProperty("jcr:data").getBinary();
-                    return binary.getStream();
-                }
+            //check if metadata child node exists
+            if (JcrUtils.getNodeIfExists(assetNode, JCR_METADATA_NODE) == null) {
+                return false;
+            }
+            Node metadataNode = assetNode.getNode(JCR_METADATA_NODE);
+
+            //check if system extension exists
+            if (!metadataNode.hasProperty(DC_FORMAT)) {
+                return false;
+            }
+            //get system extension property i.e (application/zip)
+            String dcformatProperty = metadataNode.getProperty(DC_FORMAT).getString();
+            long assetSize = metadataNode.getProperty(DAM_SIZE).getLong();
+
+            boolean fileExtCheck = dcformatProperty.substring(dcformatProperty.lastIndexOf('/') + 1).equals("png");
+            long fourMBInBytes = 4L << 20;
+            boolean fileSizeCheck = assetSize < fourMBInBytes;
+
+            return fileExtCheck && fileSizeCheck;
+        } catch (RepositoryException e) {
+            return false;
+        }
+    }
+
+    private InputStream getImageAsStream(Node assetNode){
+        try {
+            if (JcrUtils.getNodeIfExists(assetNode, OG_REDNITION_PATH) == null) {
+                return null;
+            }
+            Node ogAssetNode = assetNode.getNode(OG_REDNITION_PATH);
+            if (ogAssetNode != null) {
+                Binary binary = ogAssetNode.getProperty(JCR_DATA).getBinary();
+                return binary.getStream();
             }
         } catch (RepositoryException | IllegalStateException e){
             log.error("Error in converting DAM image to input stream: "+ e.getMessage());
